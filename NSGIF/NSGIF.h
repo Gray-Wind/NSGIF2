@@ -9,8 +9,14 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #import <AVFoundation/AVFoundation.h>
+
+#if TARGET_OS_IPHONE
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <UIKit/UIKit.h>
+#elif TARGET_OS_MAC
+#import <CoreServices/CoreServices.h>
+#import <WebKit/WebKit.h>
+#endif
 
 typedef NS_ENUM(NSInteger, NSGIFScale) {
     NSGIFScaleOptimize,
@@ -77,6 +83,7 @@ typedef void (^ NSGIFProgressHandler)(double progress, NSUInteger offset, NSUInt
 
 - (instancetype __nonnull)initWithSourceVideo:(NSURL * __nullable)fileURL;
 + (instancetype __nonnull)requestWithSourceVideo:(NSURL * __nullable)fileURL;
+
 @end
 
 #pragma mark NSGIFRequest
@@ -99,10 +106,12 @@ typedef void (^ NSGIFProgressHandler)(double progress, NSUInteger offset, NSUInt
 
 + (NSGIFRequest * __nonnull)requestWithSourceVideo:(NSURL * __nullable)fileURL destination:(NSURL * __nullable)videoFileURL;
 + (NSGIFRequest * __nonnull)requestWithSourceVideoForLivePhoto:(NSURL *__nullable)fileURL;
+
 @end
 
 #pragma mark NSExtractFramesRequest
 @interface NSFrameExtractingRequest : NSSerializedResourceRequest
+
 /* optional.
  * Defaults to jpg.
  * This property will be affect to UTType(Automatically detected) of extracting image file.
@@ -113,6 +122,7 @@ typedef void (^ NSGIFProgressHandler)(double progress, NSUInteger offset, NSUInt
  * defaults to temp directory.
  */
 @property(nullable, nonatomic) NSURL * destinationDirectory;
+
 @end
 
 #pragma mark NSSerializedResourceResponse
@@ -132,5 +142,7 @@ typedef void (^ NSGIFProgressHandler)(double progress, NSUInteger offset, NSUInt
 
 + (void)create:(NSGIFRequest *__nullable)request completion:(void (^ __nullable)(NSURL * __nullable))completionBlock;
 
-+ (void)extract:(NSFrameExtractingRequest *__nullable)request completion:(void (^ __nullable)(NSFrameExtractingResponse * __nullable))completionBlock;
++ (void)extract:(NSFrameExtractingRequest *__nullable)request
+	 completion:(void (^ __nullable)(NSFrameExtractingResponse * __nullable))completionBlock;
+
 @end

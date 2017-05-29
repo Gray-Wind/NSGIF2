@@ -97,6 +97,7 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
     NSAssert(self.framesPerSecond>0, @"framesPerSecond must be higer than 0.");
     NSAssert(self.aspectRatioToCrop.width>=0 && self.aspectRatioToCrop.height>=0, @"all values in aspectRatioToCrop must be same or higer than 0.");
 }
+
 @end
 
 #pragma mark - NSGIFRequest
@@ -141,6 +142,7 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
     }
     return self;
 }
+
 @end
 
 
@@ -158,15 +160,19 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 + (instancetype)responseWithImageURLs:(NSArray<NSURL *>*)urls {
     return [[self alloc] initWithImageURLs:urls];
 }
+
 @end
 
 
 #pragma mark - NSFrameExtractingResponse
 @interface NSFrameExtractingResponse()
+
 @property(nonatomic, assign) NSTimeInterval durationOfFrames;
+
 @end
 
 @implementation NSFrameExtractingResponse
+
 @end
 
 #pragma mark - NSGIF
@@ -178,7 +184,7 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 
     AVURLAsset *asset = [AVURLAsset assetWithURL:request.sourceVideoFile];
     NSArray * assetTracks = [asset tracksWithMediaType:AVMediaTypeVideo];
-    NSAssert(assetTracks.count,@"Not found any AVMediaTypeVideo in AVURLAsset which fetched from given sourceVideo file url");
+    NSAssert(assetTracks.count, @"Not found any AVMediaTypeVideo in AVURLAsset which fetched from given sourceVideo file url");
     //early return if asset is nil or not found video.
     if(!assetTracks.count){
         !completionBlock?:completionBlock(nil);
@@ -274,6 +280,16 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 
 #pragma mark - Base methods
 
+#if TARGET_OS_MAC
++ (CGImageRef)imageRefFromNSImage:(NSImage *)image
+{
+	CGImageSourceRef imageSourceRef = CGImageSourceCreateWithData((__bridge CFDataRef)[image TIFFRepresentation], NULL);
+	CGImageRef imageRef = CGImageSourceCreateImageAtIndex(imageSourceRef, 0, NULL);
+	CFRelease(imageSourceRef);
+	return imageRef;
+}
+#endif
+
 + (NSURL *)createGIFforTimePoints:(NSArray *)timePoints
                           fromURL:(NSURL *)url
                             toURL:(NSURL *)destFileURL
@@ -290,7 +306,7 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
     NSParameterAssert(fileProperties);
     NSParameterAssert(frameProperties);
 
-    CGImageDestinationRef destination = CGImageDestinationCreateWithURL((__bridge CFURLRef)destFileURL, kUTTypeGIF , frameCount, NULL);
+    CGImageDestinationRef destination = CGImageDestinationCreateWithURL((__bridge CFURLRef)destFileURL, kUTTypeGIF, frameCount, NULL);
 
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
     AVAssetImageGenerator *generator = [AVAssetImageGenerator assetImageGeneratorWithAsset:asset];
@@ -307,14 +323,22 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
     BOOL stop = NO;
     for (NSValue *time in timePoints) {
         @autoreleasepool {
-            UIImage * currentFrameImage = [UIImage imageWithCGImage:[generator copyCGImageAtTime:[time CMTimeValue] actualTime:nil error:&error]];
+			CGImageRef imageRef = [generator copyCGImageAtTime:[time CMTimeValue] actualTime:nil error:&error];
+#if TARGET_OS_IPHONE
+            UIImage * currentFrameImage = [UIImage imageWithCGImage:imageRef];
+#elif TARGET_OS_MAC
+			NSImage *currentFrameImage = [[NSImage alloc] initWithCGImage:imageRef size:NSMakeSize(CGImageGetWidth(imageRef), CGImageGetHeight(imageRef))];
+#endif
+			CGImageRelease(imageRef);
 
             //rescale
             if(outputScale != 1){
+#if TARGET_OS_IPHONE
                 currentFrameImage = [self.class imageByScalingToFill:currentFrameImage size:CGSizeMake(currentFrameImage.size.width * outputScale, currentFrameImage.size.height * outputScale) rescaleTo:currentFrameImage.scale];
+#endif
             }
             //crop
-            if(!CGSizeEqualToSize(aspectRatioToCrop,CGSizeZero)){
+            if(!CGSizeEqualToSize(aspectRatioToCrop, CGSizeZero)){
                 currentFrameImage = [self.class imageByCroppingRect:currentFrameImage rect:CropRectAspectFill(currentFrameImage.size, aspectRatioToCrop)];
             }
 
@@ -323,7 +347,11 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
                 NSLog(@"Error copying image: %@", error);
             }
 
+#if TARGET_OS_IPHONE
             CGImageRef currentFrameImageRef = CGImageCreateCopy(currentFrameImage.CGImage);
+#elif TARGET_OS_MAC
+			CGImageRef currentFrameImageRef = [self.class imageRefFromNSImage:currentFrameImage];
+#endif
 
             if (currentFrameImageRef) {
                 CGImageRelease(previousImageRefCopy);
@@ -486,15 +514,22 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 
             NSURL * destFileURL = [destDir URLByAppendingPathComponent:filePathComponent isDirectory:NO];
 
-            UIImage * currentFrameImage = [UIImage imageWithCGImage:[generator copyCGImageAtTime:[time CMTimeValue] actualTime:nil error:&error] scale:1 orientation:UIImageOrientationUp];
+			CGImageRef imageRef = [generator copyCGImageAtTime:[time CMTimeValue] actualTime:nil error:&error];
+#if TARGET_OS_IPHONE
+			UIImage * currentFrameImage = [UIImage imageWithCGImage:imageRef scale:1 orientation:UIImageOrientationUp];
+#elif TARGET_OS_MAC
+			NSImage *currentFrameImage = [[NSImage alloc] initWithCGImage:imageRef size:NSMakeSize(CGImageGetWidth(imageRef), CGImageGetHeight(imageRef))];
+#endif
 
             //rescale
             if(outputScale != 1){
+#if TARGET_OS_IPHONE
                 currentFrameImage = [self.class imageByScalingToFill:currentFrameImage size:CGSizeMake(currentFrameImage.size.width * outputScale, currentFrameImage.size.height * outputScale) rescaleTo:currentFrameImage.scale];
+#endif
             }
 
             //crop
-            if(!CGSizeEqualToSize(aspectRatioToCrop,CGSizeZero)){
+            if(!CGSizeEqualToSize(aspectRatioToCrop, CGSizeZero)) {
                 currentFrameImage = [self.class imageByCroppingRect:currentFrameImage rect:CropRectAspectFill(currentFrameImage.size, aspectRatioToCrop)];
             }
 
@@ -515,12 +550,25 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 }
 
 #pragma mark Utils - I/O
+#if TARGET_OS_IPHONE
 + (BOOL)writeImage:(UIImage *)image toURL:(NSURL *)filePathURL{
-    NSData * imageData;
+#elif TARGET_OS_MAC
++ (BOOL)writeImage:(NSImage *)image toURL:(NSURL *)filePathURL{
+	NSBitmapImageRep *bitmapRep = [[NSBitmapImageRep alloc] initWithFocusedViewRect:NSMakeRect(0, 0, image.size.width, image.size.height)];
+#endif
+	NSData * imageData;
     if([@"image/png" isEqualToString:[self mimeTypeFromPathExtension:[filePathURL path]]]){
+#if TARGET_OS_IPHONE
         imageData = UIImagePNGRepresentation(image);
+#elif TARGET_OS_MAC
+		imageData = [bitmapRep representationUsingType:NSPNGFileType properties:@{}];
+#endif
     }else{
-        imageData = UIImageJPEGRepresentation(image, 1);
+#if TARGET_OS_IPHONE
+		imageData = UIImageJPEGRepresentation(image, 1);
+#elif TARGET_OS_MAC
+		imageData = [bitmapRep representationUsingType:NSJPEGFileType properties:@{NSImageCompressionFactor: @1}];
+#endif
     }
     return [imageData writeToURL:filePathURL atomically:YES];
 }
@@ -537,17 +585,28 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
 }
 
 #pragma mark Utils - Images
+#if TARGET_OS_IPHONE
 + (UIImage *)imageByCroppingRect:(UIImage *)image rect:(CGRect)rect {
     CGImageRef croppedImageRef = CGImageCreateWithImageInRect([image CGImage], rect);
     UIImage *croppedImage = [UIImage imageWithCGImage:croppedImageRef scale:image.scale orientation:image.imageOrientation];
+#elif TARGET_OS_MAC
++ (NSImage *)imageByCroppingRect:(NSImage *)image rect:(CGRect)rect {
+	CGImageRef croppedImageRef = CGImageCreateWithImageInRect([self.class imageRefFromNSImage:image], rect);
+	NSImage *croppedImage = [[NSImage alloc] initWithCGImage:croppedImageRef size:NSSizeFromCGSize(rect.size)];
+#endif
     if (croppedImageRef) {
         CGImageRelease(croppedImageRef);
     }
     return croppedImage;
 }
 
+#if TARGET_OS_IPHONE
 + (UIImage*)imageByScalingToFill:(UIImage *)image size:(CGSize)fillSize rescaleTo:(CGFloat)scaleToRescale{
     CGImageRef sourceRef = image.CGImage;
+#elif TARGET_OS_MAC
++ (NSImage*)imageByScalingToFill:(NSImage *)image size:(CGSize)fillSize rescaleTo:(CGFloat)scaleToRescale {
+	CGImageRef sourceRef = [self.class imageRefFromNSImage:image];
+#endif
     vImage_Buffer srcBuffer;
     vImage_CGImageFormat format = {
             .bitsPerComponent = 8,
@@ -588,7 +647,11 @@ CropRectAspectFill(CGSize targetSize, CGSize sizeValueOfAspectRatio){
     CGImageRef destRef = vImageCreateCGImageFromBuffer(&dstBuffer, &format, NULL, NULL, kvImageNoFlags, &ret);
     free(dstData);
 
+#if TARGET_OS_IPHONE
     UIImage *destImage = [[UIImage alloc] initWithCGImage:destRef scale:0.0 orientation:image.imageOrientation];
+#elif TARGET_OS_MAC
+	NSImage *destImage = [[NSImage alloc] initWithCGImage:destRef size:NSSizeFromCGSize(fillSize)];
+#endif
     CGImageRelease(destRef);
     CGImageRelease(sourceRef);
 
